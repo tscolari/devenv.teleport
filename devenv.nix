@@ -25,6 +25,7 @@ let
   prelude = ''
     set -euo pipefail
     TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
+    TPDEV_LICENSE="''${TPDEV_LICENSE:-$TPDEV_SRC/e/fixtures/license.pem}"
     if [ "$TPDEV_EDITION" = "ent" ]; then
       BUILD_DIR="$TPDEV_SRC/e/build"
     else
@@ -87,7 +88,8 @@ in
     #   or set env.TPDEV_EDITION = "ent"; in devenv.local.nix
 
     # Path to an enterprise license PEM file. Required when TPDEV_EDITION=ent.
-    TPDEV_LICENSE = lib.mkDefault "../teleport/e/fixtures/license.pem";
+    # Defaults at runtime to $TPDEV_SRC/e/fixtures/license.pem if not set.
+    # Override via: export TPDEV_LICENSE=/path/to/license.pem
 
     TPDEV_STATE = stateDir;
     TPDEV_CONFIG = "${stateDir}/teleport.yaml";
