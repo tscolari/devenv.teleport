@@ -382,9 +382,9 @@ in
     "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" create --force "$ROLE_FILE"
 
     # Idempotently ensure the bot resource exists on the auth server.
-    # On first run, create the bot with --legacy to get a reusable join token.
-    # On subsequent runs, reuse the token_id saved from the first creation.
-    BOT_TOKEN_FILE="$TPDEV_TBOT_DIR/token"
+    # On first run, create the bot and save the join_uri for tbot to use.
+    # On subsequent runs, reuse the saved join_uri.
+    JOIN_URI_FILE="$TPDEV_TBOT_DIR/join_uri"
     if "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$TPDEV_BOT\")" >/dev/null 2>&1; then
       echo "bot '$TPDEV_BOT' already exists — updating roles"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots update "$TPDEV_BOT" --add-roles "$TPDEV_APP_ROLE"
@@ -397,42 +397,27 @@ in
       BOT_OUT=$("$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots add \
         --format=json \
         --logins="$USER" \
-        --legacy \
-        --ttl=87600h \
         $ROLE_FLAGS \
         "$TPDEV_BOT")
-      echo "$BOT_OUT" | jq -r '.token_id' > "$BOT_TOKEN_FILE"
-      chmod 600 "$BOT_TOKEN_FILE"
+      echo "$BOT_OUT" | jq -r '.join_uri' > "$JOIN_URI_FILE"
+      chmod 600 "$JOIN_URI_FILE"
     fi
 
-    # Resolve the bot join token — either saved from creation or look it up.
-    if [ -f "$BOT_TOKEN_FILE" ] && [ -s "$BOT_TOKEN_FILE" ]; then
-      BOT_TOKEN=$(cat "$BOT_TOKEN_FILE")
-    else
-      # Look up the existing legacy token for this bot.
-      BOT_TOKEN=$("$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens ls --format=json 2>/dev/null \
-        | jq -r ".[] | select(.spec.bot_name == \"$TPDEV_BOT\" and .spec.join_method == \"token\") | .metadata.name" \
-        | head -1)
-      if [ -z "$BOT_TOKEN" ]; then
-        echo "ERROR: could not find a join token for bot '$TPDEV_BOT'" >&2
-        echo "Run 'tp-reset' and restart to recreate the bot." >&2
-        exit 1
-      fi
-      echo "$BOT_TOKEN" > "$BOT_TOKEN_FILE"
-      chmod 600 "$BOT_TOKEN_FILE"
+    if [ ! -f "$JOIN_URI_FILE" ] || [ ! -s "$JOIN_URI_FILE" ]; then
+      echo "ERROR: no saved join_uri for bot '$TPDEV_BOT'" >&2
+      echo "Run 'tp-reset' and restart to recreate the bot." >&2
+      exit 1
     fi
+    JOIN_URI=$(cat "$JOIN_URI_FILE")
 
     # Wipe stored identity so tbot always re-joins fresh (avoids stale
     # credential errors after cluster state resets).
     rm -rf "$TPDEV_TBOT_STORAGE"/*
 
-    # (Re)write tbot config pointing at the bot's join token.
+    # (Re)write tbot config using the join_uri from bot creation.
     cat > "$TPDEV_TBOT_CONFIG" <<EOF
     version: v2
-    proxy_server: $TPDEV_PROXY
-    onboarding:
-      join_method: token
-      token: $BOT_TOKEN
+    join_uri: $JOIN_URI
     storage:
       type: directory
       path: $TPDEV_TBOT_STORAGE
