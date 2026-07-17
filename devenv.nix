@@ -439,8 +439,8 @@ in
         echo "trusted local TLS certs missing — running tp-certs (set TPDEV_AUTO_CERTS=0 to skip)"
         tp-certs
       fi
-      tp-config
       ${ensureBuild}
+      tp-config
       exec "$BUILD_DIR/teleport" start --config "$TPDEV_CONFIG"
     '';
     process-compose = {
