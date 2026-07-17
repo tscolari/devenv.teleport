@@ -123,10 +123,6 @@ in
 
     # Static join token for attaching extra local agents (nodes, apps, dbs...).
     TPDEV_JOIN_TOKEN = "local-dev-token";
-
-    # Static bot join token — configured in the cluster config so tbot can
-    # always re-join fresh without one-time token management.
-    TPDEV_BOT_TOKEN = "local-bot-token";
   }
   // lib.optionalAttrs isDarwin {
     # --- macOS toolchain, sourced entirely from nix (no Homebrew) ---
@@ -385,15 +381,10 @@ in
     EOF
     "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" create --force "$ROLE_FILE"
 
-    # Ensure a long-lived bot join token exists. Using --value with a fixed
-    # string makes this idempotent — if the token already exists with that
-    # value, tctl exits 0 or we ignore the "already exists" error.
-    "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens add \
-      --type=bot \
-      --value="$TPDEV_BOT_TOKEN" \
-      --ttl=87600h 2>/dev/null || true
-
     # Idempotently ensure the bot resource exists on the auth server.
+    # On first run, create the bot with --legacy to get a reusable join token.
+    # On subsequent runs, reuse the token_id saved from the first creation.
+    BOT_TOKEN_FILE="$TPDEV_TBOT_DIR/token"
     if "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$TPDEV_BOT\")" >/dev/null 2>&1; then
       echo "bot '$TPDEV_BOT' already exists — updating roles"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots update "$TPDEV_BOT" --add-roles "$TPDEV_APP_ROLE"
@@ -403,26 +394,45 @@ in
       if [ -n "$TPDEV_BOT_ROLES" ]; then
         ROLE_FLAGS="--roles=$TPDEV_APP_ROLE,$TPDEV_BOT_ROLES"
       fi
-      "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots add \
+      BOT_OUT=$("$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots add \
+        --format=json \
         --logins="$USER" \
-        --token="$TPDEV_BOT_TOKEN" \
         --legacy \
         --ttl=87600h \
         $ROLE_FLAGS \
-        "$TPDEV_BOT"
+        "$TPDEV_BOT")
+      echo "$BOT_OUT" | jq -r '.token_id' > "$BOT_TOKEN_FILE"
+      chmod 600 "$BOT_TOKEN_FILE"
+    fi
+
+    # Resolve the bot join token — either saved from creation or look it up.
+    if [ -f "$BOT_TOKEN_FILE" ] && [ -s "$BOT_TOKEN_FILE" ]; then
+      BOT_TOKEN=$(cat "$BOT_TOKEN_FILE")
+    else
+      # Look up the existing legacy token for this bot.
+      BOT_TOKEN=$("$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens ls --format=json 2>/dev/null \
+        | jq -r ".[] | select(.spec.bot_name == \"$TPDEV_BOT\" and .spec.join_method == \"token\") | .metadata.name" \
+        | head -1)
+      if [ -z "$BOT_TOKEN" ]; then
+        echo "ERROR: could not find a join token for bot '$TPDEV_BOT'" >&2
+        echo "Run 'tp-reset' and restart to recreate the bot." >&2
+        exit 1
+      fi
+      echo "$BOT_TOKEN" > "$BOT_TOKEN_FILE"
+      chmod 600 "$BOT_TOKEN_FILE"
     fi
 
     # Wipe stored identity so tbot always re-joins fresh (avoids stale
     # credential errors after cluster state resets).
     rm -rf "$TPDEV_TBOT_STORAGE"/*
 
-    # (Re)write tbot config pointing at the static join token.
+    # (Re)write tbot config pointing at the bot's join token.
     cat > "$TPDEV_TBOT_CONFIG" <<EOF
     version: v2
     proxy_server: $TPDEV_PROXY
     onboarding:
       join_method: token
-      token: $TPDEV_BOT_TOKEN
+      token: $BOT_TOKEN
     storage:
       type: directory
       path: $TPDEV_TBOT_STORAGE
