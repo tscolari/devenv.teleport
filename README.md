@@ -12,9 +12,39 @@ hand-written config.
 
 ## Prerequisites
 
-- [Nix](https://nixos.org/download) and [devenv](https://devenv.sh/getting-started/)
-- On macOS: no Homebrew or Xcode Command Line Tools required — the Go (CGO)
-  and Rust toolchains, LLVM, and the Apple SDK all come from nix.
+### Install Nix
+
+Install Nix using the [Determinate Systems installer](https://github.com/DeterminateSystems/nix-installer)
+(recommended — it handles macOS quirks and is easy to uninstall):
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf -L https://install.determinate.systems/nix | sh -s -- install
+```
+
+Or use the official installer: https://nixos.org/download
+
+### Install devenv
+
+**Option A — Homebrew** (simplest on macOS):
+
+```sh
+brew install devenv
+```
+
+**Option B — Nix profile** (no Homebrew needed):
+
+```sh
+nix profile install nixpkgs#devenv
+```
+
+See the [devenv getting started guide](https://devenv.sh/getting-started/) for
+other installation methods and shell integration (direnv).
+
+### Other requirements
+
+- On macOS: no Homebrew or Xcode Command Line Tools required for the build
+  itself — the Go (CGO) and Rust toolchains, LLVM, and the Apple SDK all come
+  from nix.
 - A `teleport` checkout. By default it's expected as a sibling directory:
 
 ```
@@ -50,6 +80,32 @@ skip it:
 ```sh
 TPDEV_WEB=0 devenv up
 ```
+
+### Helper scripts
+
+If you overuse Git Worktrees like me, it's not very convenient to keep pointing to different paths.
+I use these scripts to get `devenv up` and `devenv shell` running from my current working directory:
+
+```
+tp-up() {
+    src="$PWD"
+    (
+        cd <where you cloned this repo>
+        devenv -O env.TPDEV_SRC:string "$src" up
+     )
+}
+
+tp-shell() {
+    src="$PWD"
+    (
+        cd <where you cloned this repo>
+        devenv -O env.TPDEV_SRC:string "$src" shell -- \
+          zsh -c 'cd "$TPDEV_SRC" && exec zsh'
+     )
+}
+```
+
+Note: the devenv state is shared between all runs, to reset it: `tp-reset` from within the devenv shell.
 
 ## Enterprise
 
