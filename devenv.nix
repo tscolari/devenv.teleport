@@ -123,6 +123,10 @@ in
 
     # Static join token for attaching extra local agents (nodes, apps, dbs...).
     TPDEV_JOIN_TOKEN = "local-dev-token";
+
+    # Static bot join token — configured in the cluster config so tbot can
+    # always re-join fresh without one-time token management.
+    TPDEV_BOT_TOKEN = "local-bot-token";
   }
   // lib.optionalAttrs isDarwin {
     # --- macOS toolchain, sourced entirely from nix (no Homebrew) ---
@@ -290,6 +294,7 @@ in
       $LICENSE_LINE
       tokens:
         - "node,proxy,app,db,kube:$TPDEV_JOIN_TOKEN"
+        - "bot:$TPDEV_BOT_TOKEN"
       authentication:
         type: local
         # otp alongside webauthn so tsh login works without a hardware key
@@ -382,6 +387,8 @@ in
     "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" create --force "$ROLE_FILE"
 
     # Idempotently ensure the bot resource exists on the auth server.
+    # The bot joins using the static token configured in teleport.yaml,
+    # so no runtime token management is needed.
     if "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$TPDEV_BOT\")" >/dev/null 2>&1; then
       echo "bot '$TPDEV_BOT' already exists — updating roles"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots update "$TPDEV_BOT" --add-roles "$TPDEV_APP_ROLE"
@@ -393,29 +400,24 @@ in
       fi
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots add \
         --logins="$USER" \
+        --token="$TPDEV_BOT_TOKEN" \
+        --legacy \
+        --ttl=87600h \
         $ROLE_FLAGS \
         "$TPDEV_BOT"
     fi
 
-    # Create (or reuse) a long-lived bot join token. We use a fixed token name
-    # so repeated runs reuse the same token instead of creating new ones.
-    BOT_TOKEN_NAME="tbot-local-join"
-    if ! "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$BOT_TOKEN_NAME\")" >/dev/null 2>&1; then
-      echo "creating bot join token '$BOT_TOKEN_NAME'"
-      "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens add \
-        --type=bot \
-        --name="$BOT_TOKEN_NAME" \
-        --bot-name="$TPDEV_BOT" \
-        --ttl=87600h
-    fi
+    # Wipe stored identity so tbot always re-joins fresh (avoids stale
+    # credential errors after cluster state resets).
+    rm -rf "$TPDEV_TBOT_STORAGE"/*
 
-    # (Re)write tbot config pointing at the bot join token.
+    # (Re)write tbot config pointing at the static join token.
     cat > "$TPDEV_TBOT_CONFIG" <<EOF
     version: v2
     proxy_server: $TPDEV_PROXY
     onboarding:
       join_method: token
-      token: $BOT_TOKEN_NAME
+      token: $TPDEV_BOT_TOKEN
     storage:
       type: directory
       path: $TPDEV_TBOT_STORAGE
