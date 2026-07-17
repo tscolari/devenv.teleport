@@ -25,10 +25,8 @@ Or use the official installer: https://nixos.org/download
 
 ### Install devenv
 
-**Option A — Homebrew** (simplest on macOS):
-
 ```sh
-brew install devenv
+nix-env --install --attr devenv -f https://github.com/NixOS/nixpkgs/tarball/nixpkgs-unstable
 ```
 
 **Option B — Nix profile** (no Homebrew needed):
@@ -50,7 +48,7 @@ other installation methods and shell integration (direnv).
 ```
 workspace/
 ├── teleport/          # github.com/gravitational/teleport
-└── teleport-devenv/   # this repo
+└── devenv.teleport/   # this repo
 ```
 
 To point elsewhere, create a `devenv.local.nix`:
@@ -63,15 +61,19 @@ To point elsewhere, create a `devenv.local.nix`:
 
 ```sh
 devenv up          # builds teleport/tctl/tsh on first run, then starts everything
-tp-bootstrap       # in another shell: creates the 'dev' user, prints a signup link
-tp-login           # after signup: log in with tsh against the local proxy
+
+# In another terminal:
+devenv shell       # enters the environment and makes the helper commands available
+tp-bootstrap       # creates the 'dev' user and prints a signup link
+tp-login           # after signup, logs in with tsh against the local proxy
 ```
 
 `devenv up` starts the cluster and prints a banner with the URL and next steps
 once it's healthy. The full web UI is served by teleport at
 https://localhost:3080 — you don't need anything else to log in and explore.
-Run `tp-bootstrap` to create your user; it prints a one-time signup link — open
-it to set a password and register a passkey or OTP (both enabled; OTP means
+In another terminal, run `devenv shell` once to enter the environment, then run
+`tp-bootstrap` to create your user. It prints a one-time signup link — open it
+to set a password and register a passkey or OTP (both enabled; OTP means
 `tp-login` works without a hardware key).
 
 `devenv up` also starts the Vite hot-reload dev server for frontend work. To
@@ -296,7 +298,7 @@ directly in the Teleport checkout.
 
 The `devenv up` command installs several test dependencies, including:
 
-- [Helm](https://helm.sh) with the [helm-unittest plugin v0.2.11](https://github.com/quintush/helm-unittest) for testing Helm charts
+- [Helm](https://helm.sh) with the [helm-unittest plugin](https://github.com/helm-unittest/helm-unittest) for testing Helm charts
 - [Bats](https://github.com/bats-core/bats-core) for shell test suites
 
 To run helm chart tests:
@@ -306,4 +308,4 @@ helm plugin list
 helm unittest --help
 ```
 
-Note: The helm-unittest plugin (v0.2.11) is installed with Helm, but due to the complexity of plugin installation in Nix environments, it may require manual installation via `helm plugin install` if not automatically detected.
+Note: The helm-unittest plugin is installed with Helm, but due to the complexity of plugin installation in Nix environments, it may require manual installation via `helm plugin install` if not automatically detected.
