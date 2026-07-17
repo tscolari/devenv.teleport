@@ -70,8 +70,8 @@ in
   # Environment
   # ---------------------------------------------------------------------------
   env = {
-    # Path to the teleport checkout. Override per-machine in devenv.local.nix
-    # or with `export TPDEV_SRC=...` before entering the shell.
+    # Path to the teleport checkout. Override per-machine in devenv.local.nix:
+    #   { lib, ... }: { env.TPDEV_SRC = "/path/to/teleport"; }
     TPDEV_SRC = lib.mkDefault "../teleport";
 
     # Teleport pins an exact Go patch version in go.mod/versions.mk; nixpkgs may
@@ -80,7 +80,11 @@ in
 
     # "oss" or "ent". Enterprise requires the e/ submodule
     # (make init-submodules-e) and a license (see TPDEV_LICENSE).
-    TPDEV_EDITION = lib.mkDefault "oss";
+    # Not set here so that shell exports and .envrc can override it;
+    # the default ("oss") is applied at runtime in the prelude.
+    # To use enterprise, either:
+    #   export TPDEV_EDITION=ent   (in your shell / .envrc)
+    #   or set env.TPDEV_EDITION = "ent"; in devenv.local.nix
 
     # Path to an enterprise license PEM file. Required when TPDEV_EDITION=ent.
     TPDEV_LICENSE = lib.mkDefault "../teleport/e/fixtures/license.pem";
@@ -586,6 +590,9 @@ in
   enterShell = darwinToolchain + ''
     # Avoid making ordinary interactive shells look like process-compose clients.
     unset PC_SOCKET_PATH PC_CONFIG_FILES
+
+    # Default edition if not already set (e.g. via .envrc or devenv.local.nix)
+    export TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
 
     echo "teleport-devenv (edition: $TPDEV_EDITION)"
     echo "  devenv up       start the local cluster (builds on first run)"
