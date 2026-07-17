@@ -294,7 +294,6 @@ in
       $LICENSE_LINE
       tokens:
         - "node,proxy,app,db,kube:$TPDEV_JOIN_TOKEN"
-        - "bot:$TPDEV_BOT_TOKEN"
       authentication:
         type: local
         # otp alongside webauthn so tsh login works without a hardware key
@@ -386,9 +385,15 @@ in
     EOF
     "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" create --force "$ROLE_FILE"
 
+    # Ensure a long-lived bot join token exists. Using --value with a fixed
+    # string makes this idempotent — if the token already exists with that
+    # value, tctl exits 0 or we ignore the "already exists" error.
+    "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" tokens add \
+      --type=bot \
+      --value="$TPDEV_BOT_TOKEN" \
+      --ttl=87600h 2>/dev/null || true
+
     # Idempotently ensure the bot resource exists on the auth server.
-    # The bot joins using the static token configured in teleport.yaml,
-    # so no runtime token management is needed.
     if "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$TPDEV_BOT\")" >/dev/null 2>&1; then
       echo "bot '$TPDEV_BOT' already exists — updating roles"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots update "$TPDEV_BOT" --add-roles "$TPDEV_APP_ROLE"
