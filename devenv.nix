@@ -25,7 +25,7 @@ let
   prelude = ''
     set -euo pipefail
     TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
-    TPDEV_LICENSE="''${TPDEV_LICENSE:-$TPDEV_SRC/e/fixtures/license.pem}"
+    TPDEV_LICENSE="''${TPDEV_LICENSE:-$TPDEV_SRC/e/fixtures/license-eub.pem}"
     if [ "$TPDEV_EDITION" = "ent" ]; then
       BUILD_DIR="$TPDEV_SRC/e/build"
     else
@@ -88,7 +88,7 @@ in
     #   or set env.TPDEV_EDITION = "ent"; in devenv.local.nix
 
     # Path to an enterprise license PEM file. Required when TPDEV_EDITION=ent.
-    # Defaults at runtime to $TPDEV_SRC/e/fixtures/license.pem if not set.
+    # Defaults at runtime to $TPDEV_SRC/e/fixtures/license-eub.pem if not set.
     # Override via: export TPDEV_LICENSE=/path/to/license.pem
 
     TPDEV_STATE = stateDir;
@@ -446,9 +446,9 @@ in
     process-compose = {
       readiness_probe = {
         exec.command = "curl -k -fsS https://localhost:3080/webapi/ping";
-        initial_delay_seconds = 5;
-        period_seconds = 3;
-        failure_threshold = 20;
+        initial_delay_seconds = 10;
+        period_seconds = 5;
+        failure_threshold = 60;
       };
       availability.restart = "on_failure";
     };
