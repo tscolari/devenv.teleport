@@ -1,0 +1,11 @@
+# devenv generated state (toolchains, cluster data, certs, logs)
+.devenv
+
+# Machine-local overrides (may contain paths or license locations)
+devenv.local.nix
+.envrc
+.env
+
+# Credentials that could be generated into the project root
+*.pem
+*.key
