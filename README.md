@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-The most straightforward way to run a Teleport cluster locally for development.
+A straightforward way to run a Teleport cluster locally for development.
 
 Uses [devenv](https://devenv.sh) to provide a self-contained, reproducible
 environment: the full build toolchain (Go, Rust, Node/pnpm, libfido2,
