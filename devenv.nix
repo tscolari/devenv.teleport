@@ -123,6 +123,9 @@ in
 
     # Static join token for attaching extra local agents (nodes, apps, dbs...).
     TPDEV_JOIN_TOKEN = "local-dev-token";
+
+    # Teleport Unstable
+    TELEPORT_UNSTABLE_SCOPES = "yes";
   }
   // lib.optionalAttrs isDarwin {
     # --- macOS toolchain, sourced entirely from nix (no Homebrew) ---
