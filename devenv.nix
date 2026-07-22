@@ -202,18 +202,30 @@ in
   # ---------------------------------------------------------------------------
 
   # Build the binaries we need from the sibling checkout.
-  scripts.tp-build.exec = ''
-    ${prelude}
-    if [ "$TPDEV_EDITION" = "ent" ]; then
-      if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
-        echo "e/ submodule missing — running: make -C $TPDEV_SRC init-submodules-e"
-        make -C "$TPDEV_SRC" init-submodules-e
-      fi
-      make -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
-    else
-      make -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
-    fi
-  '';
+   scripts.tp-build.exec = ''
+     ${prelude}
+     if [ "$TPDEV_EDITION" = "ent" ]; then
+       if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
+         echo "e/ submodule missing — running: make -C $TPDEV_SRC init-submodules-e"
+         make -C "$TPDEV_SRC" init-submodules-e
+       elif [ "''${TPDEV_SKIP_SUBMODULE_UPDATE:-}" != "1" ]; then
+         EXPECTED_SHA=$(git -C "$TPDEV_SRC" ls-tree HEAD e | awk '{print $3}')
+         CURRENT_SHA=$(git -C "$TPDEV_SRC/e" rev-parse HEAD)
+         if [ "$EXPECTED_SHA" != "$CURRENT_SHA" ]; then
+           DIRTY=$(git -C "$TPDEV_SRC/e" status --porcelain)
+           if [ -n "$DIRTY" ]; then
+             echo "WARNING: e/ submodule is at ''${CURRENT_SHA:0:12} (expected ''${EXPECTED_SHA:0:12}) and has uncommitted changes — skipping update"
+           else
+             echo "e/ submodule is at ''${CURRENT_SHA:0:12}, updating to ''${EXPECTED_SHA:0:12}"
+             git -C "$TPDEV_SRC" submodule update e
+           fi
+         fi
+       fi
+       make -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
+     else
+       make -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
+     fi
+   '';
 
   # Trusted local TLS certs via mkcert (optional but recommended: no
   # browser warnings and no --insecure). Installs a local CA on first run.
