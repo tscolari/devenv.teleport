@@ -64,6 +64,22 @@ let
     # override it; inject via MAKEFLAGS (spaces escaped for make's arg parser).
     _cgoflag="CGO_ENABLED=1 CC=$CC CXX=$CXX CGO_CFLAGS=--sysroot=$SDKROOT CGO_LDFLAGS=-Wl,-syslibroot,$SDKROOT"
     export MAKEFLAGS="''${MAKEFLAGS:+$MAKEFLAGS }CGOFLAG=''${_cgoflag// /\\ }"
+    # Which `make` binary to use. GNU Make 4.4+ triggers a pathological
+    # O(n^2) shell-out explosion on older Teleport branches (v18 and below)
+    # due to a bare `export` + recursive $(shell) variables in the Makefile.
+    # Default to the system make (resolved via xcrun with a clean PATH to
+    # avoid nix interference). /usr/bin/make is an xcrun shim that causes
+    # infinite recursion when symlinked, so we resolve the real binary.
+    # Override before entering the shell: export TPDEV_MAKE=/path/to/make
+    export TPDEV_MAKE="''${TPDEV_MAKE:-$(PATH=/usr/bin:/bin /usr/bin/xcrun --find make)}"
+    # Put TPDEV_MAKE on PATH so all `make` invocations (interactive, recursive,
+    # pnpm scripts) use it. A symlink in a stable directory avoids temp clutter.
+    if [ -x "$TPDEV_MAKE" ]; then
+      _make_bin_dir="''${DEVENV_STATE:-/tmp}/make-shim"
+      mkdir -p "$_make_bin_dir"
+      ln -sf "$TPDEV_MAKE" "$_make_bin_dir/make"
+      export PATH="$_make_bin_dir:$PATH"
+    fi
   '';
 in
 {
@@ -78,6 +94,14 @@ in
     # Teleport pins an exact Go patch version in go.mod/versions.mk; nixpkgs may
     # lag by a patch release, so let Go fetch the required toolchain into state.
     GOTOOLCHAIN = lib.mkForce "auto";
+
+    # Skip the expensive web UI rebuild during `tp-build`. The teleport binary
+    # will still embed whatever webassets exist (or stubs). Set to "0" if you
+    # need a full UI build (e.g. working on the web frontend).
+    WEBASSETS_SKIP_BUILD = lib.mkDefault "1";
+
+    # TPDEV_MAKE is applied at runtime (see darwinToolchain) so that
+    # users can `export TPDEV_MAKE=...` before entering the shell.
 
     # "oss" or "ent". Enterprise requires the e/ submodule
     # (make init-submodules-e) and a license (see TPDEV_LICENSE).
@@ -206,8 +230,8 @@ in
      ${prelude}
      if [ "$TPDEV_EDITION" = "ent" ]; then
        if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
-         echo "e/ submodule missing — running: make -C $TPDEV_SRC init-submodules-e"
-         make -C "$TPDEV_SRC" init-submodules-e
+         echo "e/ submodule missing — running: $TPDEV_MAKE -C $TPDEV_SRC init-submodules-e"
+         "$TPDEV_MAKE" -C "$TPDEV_SRC" init-submodules-e
        elif [ "''${TPDEV_SKIP_SUBMODULE_UPDATE:-}" != "1" ]; then
          EXPECTED_SHA=$(git -C "$TPDEV_SRC" ls-tree HEAD e | awk '{print $3}')
          CURRENT_SHA=$(git -C "$TPDEV_SRC/e" rev-parse HEAD)
@@ -221,9 +245,9 @@ in
            fi
          fi
        fi
-       make -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
+       "$TPDEV_MAKE" -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
      else
-       make -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
+       "$TPDEV_MAKE" -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
      fi
    '';
 
