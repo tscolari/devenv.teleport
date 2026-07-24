@@ -197,21 +197,23 @@ and `tsh`. The process runs by default; to skip it:
 TPDEV_TBOT=0 devenv up
 ```
 
-tbot uses the static join token (`local-dev-token`) and **wipes its stored
-identity on every startup**, so it always re-joins fresh. This means you can
-stop the cluster, come back days later, and `devenv up` just works — no stale
-credential errors.
+tbot uses a bound-keypair join token and persists its private key and join state
+across restarts. The stored state must remain paired with the bot resource in
+the cluster, so it is removed only when the full environment is reset with
+`tp-reset`.
 
 `tp-tbot-init` (called automatically on startup) idempotently:
 - Creates the bot resource (`TPDEV_BOT`, default: `local-bot`) if it doesn't exist
+- Recreates the managed bot if its local bound-keypair state is missing
 - Creates/updates the `time-service-access` role and assigns it to the bot
-- Writes `tbot.yaml` pointing at the static join token
+- Saves the initial bound-keypair joining URI
+- Writes `tbot.yaml` pointing at that joining URI
 
 State lives under:
 
 ```text
 .devenv/state/teleport/tbot/tbot.yaml
-.devenv/state/teleport/tbot/storage/   # wiped each startup
+.devenv/state/teleport/tbot/storage/   # persistent bound-keypair state
 ```
 
 ### Time service (application access)

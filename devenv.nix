@@ -424,7 +424,20 @@ in
     # On first run, create the bot and save the join_uri for tbot to use.
     # On subsequent runs, reuse the saved join_uri.
     JOIN_URI_FILE="$TPDEV_TBOT_DIR/join_uri"
+    BOT_EXISTS=0
     if "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots ls --format=json 2>/dev/null | jq -e ".[] | select(.metadata.name == \"$TPDEV_BOT\")" >/dev/null 2>&1; then
+      BOT_EXISTS=1
+    fi
+
+    # A registered bound-keypair bot cannot recover if its private key was lost.
+    if [ "$BOT_EXISTS" = "1" ] && [ ! -s "$TPDEV_TBOT_STORAGE/id_bkp" ]; then
+      echo "bot '$TPDEV_BOT' has no local bound-keypair state — recreating it"
+      "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots rm "$TPDEV_BOT"
+      rm -f "$JOIN_URI_FILE"
+      BOT_EXISTS=0
+    fi
+
+    if [ "$BOT_EXISTS" = "1" ]; then
       echo "bot '$TPDEV_BOT' already exists — updating roles"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots update "$TPDEV_BOT" --add-roles "$TPDEV_APP_ROLE"
     else
@@ -448,10 +461,6 @@ in
       exit 1
     fi
     JOIN_URI=$(cat "$JOIN_URI_FILE")
-
-    # Wipe stored identity so tbot always re-joins fresh (avoids stale
-    # credential errors after cluster state resets).
-    rm -rf "$TPDEV_TBOT_STORAGE"/*
 
     # (Re)write tbot config using the join_uri from bot creation.
     cat > "$TPDEV_TBOT_CONFIG" <<EOF
@@ -534,8 +543,8 @@ in
   };
 
   # Machine ID bot agent. On by default; opt out with TPDEV_TBOT=0.
-  # Wipes tbot storage on every start so it always re-joins fresh with the
-  # static token — no stale identity problems between sessions.
+  # Bound-keypair state must persist so tbot can prove possession of the key
+  # registered during its initial join.
   processes.tbot = {
     exec = ''
       ${prelude}
@@ -545,8 +554,6 @@ in
         echo "  TPDEV_TBOT=1 devenv up"
         exit 0
       fi
-      # Wipe cached identity so tbot re-joins fresh (static token makes this safe).
-      rm -rf "$TPDEV_TBOT_STORAGE"
       tp-tbot-init
       exec tbot start application-tunnel \
         -c "$TPDEV_TBOT_CONFIG" \
