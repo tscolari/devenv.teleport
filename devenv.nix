@@ -95,10 +95,10 @@ in
     # lag by a patch release, so let Go fetch the required toolchain into state.
     GOTOOLCHAIN = lib.mkForce "auto";
 
-    # Skip the expensive web UI rebuild during `tp-build`. The teleport binary
-    # will still embed whatever webassets exist (or stubs). Set to "0" if you
-    # need a full UI build (e.g. working on the web frontend).
-    WEBASSETS_SKIP_BUILD = lib.mkDefault "1";
+    # Skip the web UI rebuild during `tp-build`. The teleport binary will still
+    # embed whatever webassets exist (or stubs). Set to "1" to skip if you only
+    # need the backend (saves significant build time).
+    WEBASSETS_SKIP_BUILD = lib.mkDefault "0";
 
     # TPDEV_MAKE is applied at runtime (see darwinToolchain) so that
     # users can `export TPDEV_MAKE=...` before entering the shell.
@@ -429,9 +429,10 @@ in
       BOT_EXISTS=1
     fi
 
-    # A registered bound-keypair bot cannot recover if its private key was lost.
-    if [ "$BOT_EXISTS" = "1" ] && [ ! -s "$TPDEV_TBOT_STORAGE/id_bkp" ]; then
-      echo "bot '$TPDEV_BOT' has no local bound-keypair state — recreating it"
+    # A registered bot cannot recover if its private key state was lost.
+    # Check for both bound-keypair state (id_bkp, v19+) and token-based state (key, v18).
+    if [ "$BOT_EXISTS" = "1" ] && [ ! -s "$TPDEV_TBOT_STORAGE/id_bkp" ] && [ ! -s "$TPDEV_TBOT_STORAGE/key" ]; then
+      echo "bot '$TPDEV_BOT' has no local state — recreating it"
       "$BUILD_DIR/tctl" -c "$TPDEV_CONFIG" bots rm "$TPDEV_BOT"
       rm -f "$JOIN_URI_FILE"
       BOT_EXISTS=0
@@ -451,7 +452,13 @@ in
         --logins="$USER" \
         $ROLE_FLAGS \
         "$TPDEV_BOT")
-      echo "$BOT_OUT" | jq -r '.join_uri' > "$JOIN_URI_FILE"
+      # v19+ outputs join_uri directly; v18 only has token_id, so construct it.
+      JOIN_URI_VAL=$(echo "$BOT_OUT" | jq -r '.join_uri // empty')
+      if [ -z "$JOIN_URI_VAL" ]; then
+        TOKEN_ID=$(echo "$BOT_OUT" | jq -r '.token_id')
+        JOIN_URI_VAL="tbot+proxy+token://''${TOKEN_ID}@localhost:$TPDEV_WEB_PORT"
+      fi
+      echo "$JOIN_URI_VAL" > "$JOIN_URI_FILE"
       chmod 600 "$JOIN_URI_FILE"
     fi
 
