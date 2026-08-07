@@ -150,6 +150,7 @@ in
 
     # Teleport Unstable
     TELEPORT_UNSTABLE_SCOPES = "yes";
+    TELEPORT_UNSTABLE_AGENT_SCOPE_PIN = "yes";
   }
   // lib.optionalAttrs isDarwin {
     # --- macOS toolchain, sourced entirely from nix (no Homebrew) ---
