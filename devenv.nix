@@ -396,6 +396,11 @@ in
     [ -f "$TPDEV_CERTS/server.crt" ] || INSECURE="--insecure"
     exec "$BUILD_DIR/tsh" login --proxy "$TPDEV_PROXY" --user "$TPDEV_USER" $INSECURE "$@"
   '';
+  scripts.teleport.exec = ''
+    ${prelude}
+    ${ensureBuild}
+    exec "$BUILD_DIR/teleport" "$@"
+  '';
   scripts.tbot.exec = ''
     ${prelude}
     ${ensureBuild}
@@ -651,6 +656,13 @@ in
 
     # Default edition if not already set (e.g. via .envrc or devenv.local.nix)
     export TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
+
+    # Put locally-built binaries first on PATH so they shadow system installs.
+    if [ "$TPDEV_EDITION" = "ent" ]; then
+      export PATH="$TPDEV_SRC/e/build:$PATH"
+    else
+      export PATH="$TPDEV_SRC/build:$PATH"
+    fi
 
     echo "teleport-devenv (edition: $TPDEV_EDITION)"
     echo "  devenv up       start the local cluster (builds on first run)"
