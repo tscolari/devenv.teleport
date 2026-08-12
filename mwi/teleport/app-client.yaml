@@ -1,0 +1,8 @@
+kind: role
+version: v6
+metadata:
+  name: mwi-app-client
+spec:
+  allow:
+    app_labels:
+      mwi: [test]

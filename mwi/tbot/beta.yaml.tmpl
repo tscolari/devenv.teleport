@@ -1,0 +1,23 @@
+version: v2
+proxy_server: ${TPDEV_PROXY}
+onboarding:
+  join_method: bound_keypair
+  token: /beta::mwi-beta-host
+  bound_keypair:
+    registration_secret: ${REGISTRATION_SECRET}
+scoped: true
+storage:
+  type: directory
+  path: ${TBOT_STORAGE}
+  symlinks: insecure
+diag_addr: 127.0.0.1:${TBOT_DIAG_PORT}
+credential_ttl: 10m
+renewal_interval: 2m
+services:
+  - type: workload-identity-api
+    name: beta-workload-api
+    listen: unix://${WORKLOAD_SOCKET}
+    selector:
+      name: /beta::host
+    credential_ttl: 5m
+    renewal_interval: 1m

@@ -1,0 +1,16 @@
+version: v2
+join_uri: ${JOIN_URI}
+storage:
+  type: directory
+  path: ${TBOT_STORAGE}
+  symlinks: insecure
+diag_addr: 127.0.0.1:${TBOT_DIAG_PORT}
+credential_ttl: 10m
+renewal_interval: 2m
+services:
+  - type: application-tunnel
+    name: mwi-app-tunnel
+    listen: tcp://127.0.0.1:${TPDEV_MWI_APP_TUNNEL_PORT}
+    app_name: ${TPDEV_MWI_APP_NAME}
+    credential_ttl: 5m
+    renewal_interval: 1m

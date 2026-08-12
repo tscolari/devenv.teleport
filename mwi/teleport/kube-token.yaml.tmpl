@@ -1,0 +1,16 @@
+kind: scoped_token
+version: v1
+metadata:
+  name: mwi-${TENANT}-kube
+scope: /${TENANT}
+spec:
+  roles: [Bot]
+  join_method: kubernetes
+  usage_mode: bot
+  bot: /${TENANT}::mwi-${TENANT}
+  kubernetes:
+    type: static_jwks
+    static_jwks:
+      jwks: ""
+    allow:
+      - service_account: mwi-system:mwi-${TENANT}-tbot

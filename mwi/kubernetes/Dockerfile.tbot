@@ -1,0 +1,6 @@
+FROM alpine:3.20
+
+COPY tbot /usr/local/bin/tbot
+
+ENTRYPOINT ["/usr/local/bin/tbot"]
+CMD ["start"]

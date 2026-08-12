@@ -1,0 +1,35 @@
+version: v2
+proxy_server: ${TPDEV_PROXY}
+onboarding:
+  join_method: bound_keypair
+  token: /alpha::mwi-alpha-host
+  bound_keypair:
+    registration_secret: ${REGISTRATION_SECRET}
+scoped: true
+storage:
+  type: directory
+  path: ${TBOT_STORAGE}
+  symlinks: insecure
+diag_addr: 127.0.0.1:${TBOT_DIAG_PORT}
+credential_ttl: 10m
+renewal_interval: 2m
+services:
+  - type: workload-identity-api
+    name: alpha-workload-api
+    listen: unix://${WORKLOAD_SOCKET}
+    selector:
+      name: /alpha::host
+    credential_ttl: 5m
+    renewal_interval: 1m
+  - type: workload-identity-x509
+    name: alpha-app-server
+    selector:
+      name: /alpha::app-server
+    destination:
+      type: directory
+      path: ${APP_SVID_DIR}
+      symlinks: insecure
+    trust_domains:
+      - app_client
+    credential_ttl: 5m
+    renewal_interval: 1m

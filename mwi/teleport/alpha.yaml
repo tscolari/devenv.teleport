@@ -1,0 +1,98 @@
+kind: bot
+version: v1
+metadata:
+  name: mwi-alpha
+scope: /alpha
+spec: {}
+---
+kind: scoped_role
+version: v1
+metadata:
+  name: mwi-alpha-issuer
+scope: /alpha
+spec:
+  assignable_scopes:
+    - /alpha
+  workload_identity:
+    labels:
+      - name: tenant
+        values: [alpha]
+  rules:
+    - resources: [workload_identity]
+      verbs: [list, read]
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: host
+  labels:
+    tenant: alpha
+    runtime: host
+scope: /alpha
+spec:
+  rules:
+    allow:
+      - conditions:
+          - attribute: workload.unix.attested
+            eq:
+              value: "true"
+  spiffe:
+    id: /alpha/_/host/{{ workload.unix.uid }}/inspector
+    x509:
+      maximum_ttl: 300s
+    jwt:
+      maximum_ttl: 300s
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: kubernetes
+  labels:
+    tenant: alpha
+    runtime: kubernetes
+scope: /alpha
+spec:
+  rules:
+    allow:
+      - conditions:
+          - attribute: workload.kubernetes.attested
+            eq:
+              value: "true"
+          - attribute: workload.kubernetes.namespace
+            eq:
+              value: mwi-alpha
+          - attribute: workload.kubernetes.service_account
+            eq:
+              value: mwi-workload
+  spiffe:
+    id: /alpha/_/k8s/{{ workload.kubernetes.namespace }}/{{ workload.kubernetes.service_account }}
+    x509:
+      maximum_ttl: 300s
+    jwt:
+      maximum_ttl: 300s
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: app-server
+  labels:
+    tenant: alpha
+    runtime: app
+scope: /alpha
+spec:
+  spiffe:
+    id: /alpha/_/app/server
+    x509:
+      maximum_ttl: 300s
+---
+kind: scoped_role_assignment
+version: v1
+metadata:
+  name: 2f9fc058-14a1-4c42-a807-90859d269ce3
+scope: /alpha
+sub_kind: dynamic
+spec:
+  bot: /alpha::mwi-alpha
+  assignments:
+    - role: /alpha::mwi-alpha-issuer
+      scope: /alpha

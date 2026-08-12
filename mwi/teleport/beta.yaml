@@ -1,0 +1,84 @@
+kind: bot
+version: v1
+metadata:
+  name: mwi-beta
+scope: /beta
+spec: {}
+---
+kind: scoped_role
+version: v1
+metadata:
+  name: mwi-beta-issuer
+scope: /beta
+spec:
+  assignable_scopes:
+    - /beta
+  workload_identity:
+    labels:
+      - name: tenant
+        values: [beta]
+  rules:
+    - resources: [workload_identity]
+      verbs: [list, read]
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: host
+  labels:
+    tenant: beta
+    runtime: host
+scope: /beta
+spec:
+  rules:
+    allow:
+      - conditions:
+          - attribute: workload.unix.attested
+            eq:
+              value: "true"
+  spiffe:
+    id: /beta/_/host/{{ workload.unix.uid }}/inspector
+    x509:
+      maximum_ttl: 300s
+    jwt:
+      maximum_ttl: 300s
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: kubernetes
+  labels:
+    tenant: beta
+    runtime: kubernetes
+scope: /beta
+spec:
+  rules:
+    allow:
+      - conditions:
+          - attribute: workload.kubernetes.attested
+            eq:
+              value: "true"
+          - attribute: workload.kubernetes.namespace
+            eq:
+              value: mwi-beta
+          - attribute: workload.kubernetes.service_account
+            eq:
+              value: mwi-workload
+  spiffe:
+    id: /beta/_/k8s/{{ workload.kubernetes.namespace }}/{{ workload.kubernetes.service_account }}
+    x509:
+      maximum_ttl: 300s
+    jwt:
+      maximum_ttl: 300s
+---
+kind: scoped_role_assignment
+version: v1
+metadata:
+  name: a81c1c31-c108-43a2-b62f-e2045efbbdd2
+scope: /beta
+sub_kind: dynamic
+spec:
+  bot: /beta::mwi-beta
+  assignments:
+    - role: /beta::mwi-beta-issuer
+      scope: /beta

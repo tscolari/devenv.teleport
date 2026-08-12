@@ -1,0 +1,11 @@
+kind: scoped_token
+version: v1
+metadata:
+  name: mwi-beta-host
+scope: /beta
+spec:
+  roles: [Bot]
+  join_method: bound_keypair
+  usage_mode: bot
+  bot: /beta::mwi-beta
+  bound_keypair: {}

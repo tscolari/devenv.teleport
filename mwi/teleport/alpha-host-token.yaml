@@ -1,0 +1,11 @@
+kind: scoped_token
+version: v1
+metadata:
+  name: mwi-alpha-host
+scope: /alpha
+spec:
+  roles: [Bot]
+  join_method: bound_keypair
+  usage_mode: bot
+  bot: /alpha::mwi-alpha
+  bound_keypair: {}

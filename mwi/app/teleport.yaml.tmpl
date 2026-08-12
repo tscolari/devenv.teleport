@@ -1,0 +1,37 @@
+version: v3
+teleport:
+  nodename: mwi-app-agent
+  data_dir: ${APP_AGENT_DATA}
+  proxy_server: ${TPDEV_PROXY}
+  join_params:
+    method: token
+    token_name: ${TPDEV_JOIN_TOKEN}
+  log:
+    output: stderr
+    severity: ${TPDEV_LOG_LEVEL}
+    format:
+      output: text
+
+auth_service:
+  enabled: "no"
+
+proxy_service:
+  enabled: "no"
+
+ssh_service:
+  enabled: "no"
+
+app_service:
+  enabled: "yes"
+  apps:
+    - name: ${TPDEV_MWI_APP_NAME}
+      uri: https://127.0.0.1:${TPDEV_MWI_APP_PORT}
+      labels:
+        mwi: test
+        tenant: alpha
+      tls:
+        mode: verify-spiffe-id
+        server_spiffe_id: spiffe://${TPDEV_CLUSTER_NAME}/alpha/_/app/server
+        allowed_cas:
+          - workload_identity
+        client_cert_mode: managed

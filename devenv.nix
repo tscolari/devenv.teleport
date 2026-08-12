@@ -119,6 +119,7 @@ in
     TPDEV_CONFIG = "${stateDir}/teleport.yaml";
     TPDEV_DATA = "${stateDir}/data";
     TPDEV_CERTS = "${stateDir}/certs";
+    TPDEV_CLUSTER_NAME = lib.mkDefault "teleport-local";
 
     # Ports — change here if they clash with something on your machine.
     TPDEV_WEB_PORT = "3080";
@@ -147,6 +148,20 @@ in
 
     # Static join token for attaching extra local agents (nodes, apps, dbs...).
     TPDEV_JOIN_TOKEN = "local-dev-token";
+
+    # Opt-in Machine & Workload Identity test lab. Tracked fixtures live in
+    # TPDEV_MWI_ROOT; generated configs, credentials, and sockets stay in state.
+    TPDEV_MWI_ROOT = "${config.env.DEVENV_ROOT}/mwi";
+    TPDEV_MWI_DIR = "${stateDir}/mwi";
+    TPDEV_MWI_ALPHA_DIAG_PORT = lib.mkDefault "18101";
+    TPDEV_MWI_BETA_DIAG_PORT = lib.mkDefault "18102";
+    TPDEV_MWI_APP_CLIENT_DIAG_PORT = lib.mkDefault "18103";
+    TPDEV_MWI_APP_NAME = lib.mkDefault "mwi-mtls-app";
+    TPDEV_MWI_APP_PORT = lib.mkDefault "18110";
+    TPDEV_MWI_APP_TUNNEL_PORT = lib.mkDefault "18111";
+    TPDEV_MWI_CONTAINER_RELAY_PORT = lib.mkDefault "18112";
+    TPDEV_MWI_KIND_CLUSTER = lib.mkDefault "teleport-mwi";
+    TPDEV_MWI_TBOT_IMAGE = lib.mkDefault "teleport-mwi-tbot";
 
     # Teleport Unstable
     TELEPORT_UNSTABLE_SCOPES = "yes";
@@ -203,6 +218,13 @@ in
     mkcert
     curl
     jq
+    openssl
+    gettext
+    yq-go
+    kind
+    kubectl
+    docker-client
+    socat
     darwin.libresolv
     # test-suite tooling — uncomment if you run these suites locally
     kubernetes-helm # helm chart tests (plus helm-unittest plugin)
@@ -293,6 +315,22 @@ in
         cert_file: $TPDEV_CERTS/server.crt"
     fi
 
+    MWI_APP_ENTRY=""
+    if [ "''${TPDEV_MWI:-0}" = "1" ]; then
+      MWI_APP_ENTRY="
+      - name: $TPDEV_MWI_APP_NAME
+        uri: https://127.0.0.1:$TPDEV_MWI_APP_PORT
+        labels:
+          mwi: test
+          tenant: alpha
+        tls:
+          mode: verify-spiffe-id
+          server_spiffe_id: spiffe://$TPDEV_CLUSTER_NAME/alpha/_/app/server
+          allowed_cas:
+            - workload_identity
+          client_cert_mode: managed"
+    fi
+
     APP_SERVICE_BLOCK="app_service:
       enabled: \"yes\"
       apps:
@@ -300,7 +338,8 @@ in
         uri: http://127.0.0.1:$TPDEV_APP_PORT
         labels:
           app: $TPDEV_APP_NAME
-          env: local"
+          env: local
+    $MWI_APP_ENTRY"
 
     DB_SERVICE_BLOCK="db_service:
       enabled: \"yes\"
@@ -310,6 +349,16 @@ in
         uri: 127.0.0.1:$TPDEV_DB_PORT
         static_labels:
           env: local"
+
+    # When MWI kube lab is expected, include common container gateway IPs in
+    # public_addr so the proxy SSH host cert has them as valid principals.
+    MWI_PUBLIC_ADDRS=""
+    if [ "''${TPDEV_MWI:-0}" = "1" ]; then
+      MWI_PUBLIC_ADDRS="
+      - 192.168.5.2:$TPDEV_WEB_PORT
+      - 172.17.0.1:$TPDEV_WEB_PORT
+      - 192.168.65.254:$TPDEV_WEB_PORT"
+    fi
 
     cat > "$TPDEV_CONFIG" <<EOF
     version: v3
@@ -325,7 +374,7 @@ in
     auth_service:
       enabled: "yes"
       listen_addr: 127.0.0.1:$TPDEV_AUTH_PORT
-      cluster_name: teleport-local
+      cluster_name: $TPDEV_CLUSTER_NAME
       proxy_listener_mode: multiplex
       $LICENSE_LINE
       tokens:
@@ -346,7 +395,8 @@ in
     proxy_service:
       enabled: "yes"
       web_listen_addr: 127.0.0.1:$TPDEV_WEB_PORT
-      public_addr: localhost:$TPDEV_WEB_PORT
+      public_addr:
+      - localhost:$TPDEV_WEB_PORT$MWI_PUBLIC_ADDRS
       $KEYPAIRS_BLOCK
 
     $APP_SERVICE_BLOCK
@@ -370,6 +420,8 @@ in
   scripts.tp-reset.exec = ''
     set -euo pipefail
     rm -rf "$TPDEV_STATE"
+    # MWI tmp dirs may still be held by running processes; best-effort removal.
+    rm -rf /tmp/tpdev-mwi-alpha /tmp/tpdev-mwi-beta 2>/dev/null || true
     echo "cluster state wiped — restart with: devenv up"
   '';
 
@@ -488,6 +540,11 @@ in
     chmod 600 "$TPDEV_TBOT_CONFIG"
     echo "wrote $TPDEV_TBOT_CONFIG"
   '';
+  scripts.tp-mwi.exec = ''
+    ${prelude}
+    ${ensureBuild}
+    exec ${pkgs.bash}/bin/bash "$TPDEV_MWI_ROOT/tp-mwi.sh" "$@"
+  '';
 
   # ---------------------------------------------------------------------------
   # Processes (process-compose)
@@ -579,6 +636,155 @@ in
     };
   };
 
+  # Opt-in scoped MWI host labs. Each tenant has an independent Bot, join
+  # token, storage directory, Workload API socket, and diagnostics endpoint.
+  processes.mwi-alpha-tbot = {
+    exec = ''
+      ${prelude}
+      if [ "''${TPDEV_MWI:-0}" != "1" ]; then
+        echo "MWI lab disabled — enable with: TPDEV_MWI=1 devenv up"
+        exit 0
+      fi
+      ${ensureBuild}
+      tp-mwi host-init alpha
+      exec "$BUILD_DIR/tbot" start -c "$TPDEV_MWI_DIR/tenants/alpha/tbot.yaml"
+    '';
+    process-compose = {
+      depends_on.teleport.condition = "process_healthy";
+      readiness_probe = {
+        exec.command = "test \"$TPDEV_MWI\" != 1 || curl -fsS http://127.0.0.1:$TPDEV_MWI_ALPHA_DIAG_PORT/readyz";
+        initial_delay_seconds = 2;
+        period_seconds = 3;
+        timeout_seconds = 2;
+        failure_threshold = 40;
+      };
+      availability.restart = "on_failure";
+    };
+  };
+
+  processes.mwi-beta-tbot = {
+    exec = ''
+      ${prelude}
+      if [ "''${TPDEV_MWI:-0}" != "1" ]; then
+        echo "MWI lab disabled — enable with: TPDEV_MWI=1 devenv up"
+        exit 0
+      fi
+      ${ensureBuild}
+      tp-mwi host-init beta
+      exec "$BUILD_DIR/tbot" start -c "$TPDEV_MWI_DIR/tenants/beta/tbot.yaml"
+    '';
+    process-compose = {
+      depends_on.teleport.condition = "process_healthy";
+      readiness_probe = {
+        exec.command = "test \"$TPDEV_MWI\" != 1 || curl -fsS http://127.0.0.1:$TPDEV_MWI_BETA_DIAG_PORT/readyz";
+        initial_delay_seconds = 2;
+        period_seconds = 3;
+        timeout_seconds = 2;
+        failure_threshold = 40;
+      };
+      availability.restart = "on_failure";
+    };
+  };
+
+  # Alpha's tbot writes a server SVID plus the app_client trust bundle. This
+  # upstream reloads both for every TLS handshake and checks the exact managed
+  # App Service client SPIFFE ID.
+  processes.mwi-app-server = {
+    exec = ''
+      ${prelude}
+      if [ "''${TPDEV_MWI:-0}" != "1" ]; then
+        echo "MWI lab disabled — enable with: TPDEV_MWI=1 devenv up"
+        exit 0
+      fi
+      SVID_DIR="$TPDEV_MWI_DIR/tenants/alpha/app-server"
+      attempts=0
+      until [ -s "$SVID_DIR/svid.pem" ] && [ -s "$SVID_DIR/svid_key.pem" ] && [ -s "$SVID_DIR/svid_bundle.pem" ]; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 120 ]; then
+          echo "timed out waiting for alpha's app-server SVID" >&2
+          exit 1
+        fi
+        sleep 1
+      done
+      exec go run "$TPDEV_MWI_ROOT/app/server.go" \
+        -listen "127.0.0.1:$TPDEV_MWI_APP_PORT" \
+        -server-cert "$SVID_DIR/svid.pem" \
+        -server-key "$SVID_DIR/svid_key.pem" \
+        -client-ca "$SVID_DIR/svid_bundle.pem" \
+        -expected-client-spiffe-id "spiffe://_teleport_app.$TPDEV_CLUSTER_NAME/app/$TPDEV_MWI_APP_NAME"
+    '';
+    process-compose = {
+      depends_on.teleport.condition = "process_healthy";
+      readiness_probe = {
+        exec.command = "test \"$TPDEV_MWI\" != 1 || nc -z 127.0.0.1 $TPDEV_MWI_APP_PORT";
+        initial_delay_seconds = 2;
+        period_seconds = 3;
+        timeout_seconds = 2;
+        failure_threshold = 60;
+      };
+      availability.restart = "on_failure";
+    };
+  };
+
+  # The MWI app is registered directly in the main teleport config (see
+  # tp-config's MWI_APP_ENTRY) rather than as a separate agent process.
+  # A separate process would require a reverse tunnel which has SSH host-key
+  # verification issues on localhost that --insecure doesn't fully address.
+
+  # A dedicated unscoped Bot drives the app tunnel so the managed-mTLS path is
+  # testable without an interactive tsh login or changes to the default Bot.
+  processes.mwi-app-client = {
+    exec = ''
+      ${prelude}
+      if [ "''${TPDEV_MWI:-0}" != "1" ]; then
+        echo "MWI lab disabled — enable with: TPDEV_MWI=1 devenv up"
+        exit 0
+      fi
+      ${ensureBuild}
+      tp-mwi app-client-init
+      exec "$BUILD_DIR/tbot" start -c "$TPDEV_MWI_DIR/app-client/tbot.yaml"
+    '';
+    process-compose = {
+      depends_on.teleport.condition = "process_healthy";
+      readiness_probe = {
+        exec.command = "test \"$TPDEV_MWI\" != 1 || curl -fsS http://127.0.0.1:$TPDEV_MWI_APP_CLIENT_DIAG_PORT/readyz";
+        initial_delay_seconds = 2;
+        period_seconds = 3;
+        timeout_seconds = 2;
+        failure_threshold = 60;
+      };
+      availability.restart = "on_failure";
+    };
+  };
+
+  # Most macOS container runtimes can reach the host's loopback listener via
+  # their special host name. This explicit fallback is intentionally opt-in
+  # because it exposes the local Teleport proxy on all host interfaces.
+  processes.mwi-container-relay = {
+    exec = ''
+      ${prelude}
+      if [ "''${TPDEV_MWI:-0}" != "1" ] || [ "''${TPDEV_MWI_CONTAINER_RELAY:-0}" != "1" ]; then
+        echo "MWI container relay disabled"
+        exit 0
+      fi
+      echo "WARNING: exposing the local Teleport proxy on 0.0.0.0:$TPDEV_MWI_CONTAINER_RELAY_PORT"
+      exec socat \
+        "TCP-LISTEN:$TPDEV_MWI_CONTAINER_RELAY_PORT,bind=0.0.0.0,reuseaddr,fork" \
+        "TCP:127.0.0.1:$TPDEV_WEB_PORT"
+    '';
+    process-compose = {
+      depends_on.teleport.condition = "process_healthy";
+      readiness_probe = {
+        exec.command = "test \"$TPDEV_MWI\" != 1 || curl -kfsS https://127.0.0.1:$TPDEV_MWI_CONTAINER_RELAY_PORT/webapi/ping";
+        initial_delay_seconds = 1;
+        period_seconds = 3;
+        timeout_seconds = 2;
+        failure_threshold = 20;
+      };
+      availability.restart = "on_failure";
+    };
+  };
+
   # Always-on time service app. Returns the current UTC time on every request.
   processes.time-service = {
     exec = ''
@@ -628,7 +834,12 @@ in
 
        Machine ID tbot runs by default. To disable it:
 
-         TPDEV_TBOT=0 devenv up
+          TPDEV_TBOT=0 devenv up
+
+       Scoped MWI/SPIFFE lab is opt-in:
+
+          TPDEV_MWI=1 devenv up
+          then run: tp-mwi doctor
 
        Services:
          App:  time-service at http://127.0.0.1:$TPDEV_APP_PORT (via tbot tunnel on :$TPDEV_APP_TUNNEL_PORT)
@@ -671,10 +882,12 @@ in
     echo "  tbot            local tbot binary wrapper"
     echo "  tp-tbot-init    create local bot config and join token"
     echo "  tp-certs        regenerate trusted local TLS certs via mkcert"
+    echo "  tp-mwi          manage the opt-in MWI/SPIFFE host and kind lab"
     echo "  tsh / tctl      talk to the local cluster"
     echo "  tp-reset        wipe cluster state"
     echo "  TPDEV_WEB=0 devenv up   skip the web UI hot-reload dev server"
     echo "  TPDEV_TBOT=0 devenv up  skip the tbot process"
+    echo "  TPDEV_MWI=1 devenv up   enable the MWI/SPIFFE host lab"
     echo ""
     echo "  services: time-service (:$TPDEV_APP_PORT), postgres (:$TPDEV_DB_PORT)"
     echo "  TPDEV_SRC=$TPDEV_SRC"

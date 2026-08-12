@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mwi-alpha
+  labels:
+    mwi.teleport.dev/tenant: alpha
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mwi-workload
+  namespace: mwi-alpha
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inspector
+  namespace: mwi-alpha
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mwi-inspector
+  template:
+    metadata:
+      labels:
+        app: mwi-inspector
+        mwi.teleport.dev/tenant: alpha
+    spec:
+      serviceAccountName: mwi-workload
+      containers:
+        - name: inspector
+          image: ${TPDEV_MWI_TBOT_IMAGE}:dev
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-c"]
+          args: ["trap : TERM INT; sleep infinity & wait"]
+          env:
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: unix:///run/spiffe/mwi-alpha.sock
+          volumeMounts:
+            - name: workload-api
+              mountPath: /run/spiffe
+              readOnly: true
+      volumes:
+        - name: workload-api
+          hostPath:
+            path: /run/tbot/sockets
+            type: Directory
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mwi-beta
+  labels:
+    mwi.teleport.dev/tenant: beta
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mwi-workload
+  namespace: mwi-beta
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inspector
+  namespace: mwi-beta
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mwi-inspector
+  template:
+    metadata:
+      labels:
+        app: mwi-inspector
+        mwi.teleport.dev/tenant: beta
+    spec:
+      serviceAccountName: mwi-workload
+      containers:
+        - name: inspector
+          image: ${TPDEV_MWI_TBOT_IMAGE}:dev
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-c"]
+          args: ["trap : TERM INT; sleep infinity & wait"]
+          env:
+            - name: SPIFFE_ENDPOINT_SOCKET
+              value: unix:///run/spiffe/mwi-beta.sock
+          volumeMounts:
+            - name: workload-api
+              mountPath: /run/spiffe
+              readOnly: true
+      volumes:
+        - name: workload-api
+          hostPath:
+            path: /run/tbot/sockets
+            type: Directory

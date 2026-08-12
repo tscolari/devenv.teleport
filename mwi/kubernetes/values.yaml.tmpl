@@ -1,0 +1,34 @@
+fullnameOverride: mwi-${TENANT}-tbot
+image: ${TPDEV_MWI_TBOT_IMAGE}
+teleportVersionOverride: dev
+imagePullPolicy: Never
+clusterName: ${TPDEV_CLUSTER_NAME}
+teleportProxyAddress: ${CONTAINER_PROXY_ADDRESS}
+token: /${TENANT}::mwi-${TENANT}-kube
+workloadIdentitySelector:
+  name: /${TENANT}::kubernetes
+tbotConfig:
+  insecure: true
+  scoped: true
+  proxy_server: ${CONTAINER_PROXY_ADDRESS}
+  onboarding:
+    join_method: kubernetes
+    token: /${TENANT}::mwi-${TENANT}-kube
+  storage:
+    type: memory
+  services:
+    - type: workload-identity-api
+      name: ${TENANT}-kubernetes-workload-api
+      listen: unix:///run/tbot/sockets/mwi-${TENANT}.sock
+      selector:
+        name: /${TENANT}::kubernetes
+      attestors:
+        kubernetes:
+          enabled: true
+          kubelet:
+            skip_verify: true
+      credential_ttl: 5m
+      renewal_interval: 1m
+extraEnv:
+  - name: TBOT_USE_PROXY_ADDR
+    value: "yes"
