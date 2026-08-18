@@ -87,7 +87,7 @@ in
   # Environment
   # ---------------------------------------------------------------------------
   env = {
-    # Path to the teleport checkout. Override per-machine in devenv.local.nix:
+    # Path to the Teleport source checkout. Override per-machine in devenv.local.nix:
     #   { lib, ... }: { env.TPDEV_SRC = "/path/to/teleport"; }
     TPDEV_SRC = lib.mkDefault "../teleport";
 
@@ -103,8 +103,8 @@ in
     # TPDEV_MAKE is applied at runtime (see darwinToolchain) so that
     # users can `export TPDEV_MAKE=...` before entering the shell.
 
-    # "oss" or "ent". Enterprise requires the e/ submodule
-    # (make init-submodules-e) and a license (see TPDEV_LICENSE).
+    # "oss" or "ent". Enterprise builds from the in-tree e/ directory
+    # and requires a license (see TPDEV_LICENSE).
     # Not set here so that shell exports and .envrc can override it;
     # the default ("oss") is applied at runtime in the prelude.
     # To use enterprise, either:
@@ -253,20 +253,10 @@ in
     ${prelude}
     if [ "$TPDEV_EDITION" = "ent" ]; then
       if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
-        echo "e/ submodule missing — running: $TPDEV_MAKE -C $TPDEV_SRC init-submodules-e"
-        "$TPDEV_MAKE" -C "$TPDEV_SRC" init-submodules-e
-      elif [ "''${TPDEV_SKIP_SUBMODULE_UPDATE:-}" != "1" ]; then
-        EXPECTED_SHA=$(git -C "$TPDEV_SRC" ls-tree HEAD e | awk '{print $3}')
-        CURRENT_SHA=$(git -C "$TPDEV_SRC/e" rev-parse HEAD)
-        if [ "$EXPECTED_SHA" != "$CURRENT_SHA" ]; then
-          DIRTY=$(git -C "$TPDEV_SRC/e" status --porcelain)
-          if [ -n "$DIRTY" ]; then
-            echo "WARNING: e/ submodule is at ''${CURRENT_SHA:0:12} (expected ''${EXPECTED_SHA:0:12}) and has uncommitted changes — skipping update"
-          else
-            echo "e/ submodule is at ''${CURRENT_SHA:0:12}, updating to ''${EXPECTED_SHA:0:12}"
-            git -C "$TPDEV_SRC" submodule update e
-          fi
-        fi
+        echo "ERROR: $TPDEV_SRC/e/Makefile not found."
+        echo "Enterprise builds require the e/ directory to be present in the source tree."
+        echo "Check that TPDEV_SRC points to a checkout that includes enterprise code."
+        exit 1
       fi
       "$TPDEV_MAKE" -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
     else

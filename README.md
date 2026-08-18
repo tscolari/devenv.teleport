@@ -43,11 +43,11 @@ other installation methods and shell integration (direnv).
 - On macOS: no Homebrew or Xcode Command Line Tools required for the build
   itself — the Go (CGO) and Rust toolchains, LLVM, and the Apple SDK all come
   from nix.
-- A `teleport` checkout. By default it's expected as a sibling directory:
+- A Teleport source checkout. By default it's expected as a sibling directory:
 
 ```
 workspace/
-├── teleport/          # github.com/gravitational/teleport
+├── teleport/          # Teleport source tree
 └── devenv.teleport/   # this repo
 ```
 
@@ -116,9 +116,8 @@ export TPDEV_EDITION=ent   # or set it in devenv.local.nix
 devenv up
 ```
 
-This initializes the `e/` submodule if needed, builds from `e/`, and wires your
-enterprise license (set `TPDEV_LICENSE` to the path of your `.pem` file) into
-the generated config.
+This builds from the in-tree `e/` directory and wires your enterprise license
+(set `TPDEV_LICENSE` to the path of your `.pem` file) into the generated config.
 
 ## Trusted TLS
 
