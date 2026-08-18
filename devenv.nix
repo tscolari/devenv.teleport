@@ -249,30 +249,30 @@ in
   # ---------------------------------------------------------------------------
 
   # Build the binaries we need from the sibling checkout.
-   scripts.tp-build.exec = ''
-     ${prelude}
-     if [ "$TPDEV_EDITION" = "ent" ]; then
-       if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
-         echo "e/ submodule missing — running: $TPDEV_MAKE -C $TPDEV_SRC init-submodules-e"
-         "$TPDEV_MAKE" -C "$TPDEV_SRC" init-submodules-e
-       elif [ "''${TPDEV_SKIP_SUBMODULE_UPDATE:-}" != "1" ]; then
-         EXPECTED_SHA=$(git -C "$TPDEV_SRC" ls-tree HEAD e | awk '{print $3}')
-         CURRENT_SHA=$(git -C "$TPDEV_SRC/e" rev-parse HEAD)
-         if [ "$EXPECTED_SHA" != "$CURRENT_SHA" ]; then
-           DIRTY=$(git -C "$TPDEV_SRC/e" status --porcelain)
-           if [ -n "$DIRTY" ]; then
-             echo "WARNING: e/ submodule is at ''${CURRENT_SHA:0:12} (expected ''${EXPECTED_SHA:0:12}) and has uncommitted changes — skipping update"
-           else
-             echo "e/ submodule is at ''${CURRENT_SHA:0:12}, updating to ''${EXPECTED_SHA:0:12}"
-             git -C "$TPDEV_SRC" submodule update e
-           fi
-         fi
-       fi
-       "$TPDEV_MAKE" -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
-     else
-       "$TPDEV_MAKE" -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
-     fi
-   '';
+  scripts.tp-build.exec = ''
+    ${prelude}
+    if [ "$TPDEV_EDITION" = "ent" ]; then
+      if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
+        echo "e/ submodule missing — running: $TPDEV_MAKE -C $TPDEV_SRC init-submodules-e"
+        "$TPDEV_MAKE" -C "$TPDEV_SRC" init-submodules-e
+      elif [ "''${TPDEV_SKIP_SUBMODULE_UPDATE:-}" != "1" ]; then
+        EXPECTED_SHA=$(git -C "$TPDEV_SRC" ls-tree HEAD e | awk '{print $3}')
+        CURRENT_SHA=$(git -C "$TPDEV_SRC/e" rev-parse HEAD)
+        if [ "$EXPECTED_SHA" != "$CURRENT_SHA" ]; then
+          DIRTY=$(git -C "$TPDEV_SRC/e" status --porcelain)
+          if [ -n "$DIRTY" ]; then
+            echo "WARNING: e/ submodule is at ''${CURRENT_SHA:0:12} (expected ''${EXPECTED_SHA:0:12}) and has uncommitted changes — skipping update"
+          else
+            echo "e/ submodule is at ''${CURRENT_SHA:0:12}, updating to ''${EXPECTED_SHA:0:12}"
+            git -C "$TPDEV_SRC" submodule update e
+          fi
+        fi
+      fi
+      "$TPDEV_MAKE" -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
+    else
+      "$TPDEV_MAKE" -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
+    fi
+  '';
 
   # Trusted local TLS certs via mkcert (optional but recommended: no
   # browser warnings and no --insecure). Installs a local CA on first run.
@@ -868,12 +868,6 @@ in
     # Default edition if not already set (e.g. via .envrc or devenv.local.nix)
     export TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
 
-    # Put locally-built binaries first on PATH so they shadow system installs.
-    if [ "$TPDEV_EDITION" = "ent" ]; then
-      export PATH="$TPDEV_SRC/e/build:$PATH"
-    else
-      export PATH="$TPDEV_SRC/build:$PATH"
-    fi
 
     echo "teleport-devenv (edition: $TPDEV_EDITION)"
     echo "  devenv up       start the local cluster (builds on first run)"
