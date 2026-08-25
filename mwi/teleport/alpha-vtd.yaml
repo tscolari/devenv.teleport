@@ -1,0 +1,6 @@
+kind: virtual_trust_domain
+version: v1
+metadata:
+  name: alpha.teleport-local
+spec:
+  assigned_scope: /alpha

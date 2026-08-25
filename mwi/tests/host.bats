@@ -17,14 +17,14 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
-@test "host workloads receive tenant-scoped SVID paths in the shared baseline trust domain" {
+@test "alpha uses its virtual trust domain while beta uses the cluster trust domain" {
   local uid
   uid=$(id -u)
 
   run tp-mwi inspect host alpha
   [ "$status" -eq 0 ]
-  [[ "$output" == *"spiffe://$TPDEV_CLUSTER_NAME/alpha/_/host/$uid/inspector"* ]]
-  [[ "$output" == *"- $TPDEV_CLUSTER_NAME (#CAs:"* ]]
+  [[ "$output" == *"spiffe://alpha.$TPDEV_CLUSTER_NAME/_/host/$uid/inspector"* ]]
+  [[ "$output" == *"- alpha.$TPDEV_CLUSTER_NAME (#CAs:"* ]]
   [[ "$output" != *"eyJ"* ]]
 
   run tp-mwi inspect host beta
@@ -49,5 +49,5 @@ setup() {
   run tp-mwi app test
   [ "$status" -eq 0 ]
   [[ "$output" == *"spiffe://_teleport_app.$TPDEV_CLUSTER_NAME/app/mwi-mtls-app"* ]]
-  [[ "$output" == *"spiffe://$TPDEV_CLUSTER_NAME/alpha/_/app/server"* ]]
+  [[ "$output" == *"spiffe://alpha.$TPDEV_CLUSTER_NAME/_/app/server"* ]]
 }

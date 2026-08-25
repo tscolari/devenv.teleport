@@ -166,6 +166,10 @@ in
     # Teleport Unstable
     TELEPORT_UNSTABLE_SCOPES = "yes";
     TELEPORT_UNSTABLE_AGENT_SCOPE_PIN = "yes";
+
+    # Never replace locally-built development clients with the version selected
+    # by the user's active ~/.tsh profile.
+    TELEPORT_TOOLS_VERSION = "off";
   }
   // lib.optionalAttrs isDarwin {
     # --- macOS toolchain, sourced entirely from nix (no Homebrew) ---
@@ -315,7 +319,7 @@ in
           tenant: alpha
         tls:
           mode: verify-spiffe-id
-          server_spiffe_id: spiffe://$TPDEV_CLUSTER_NAME/alpha/_/app/server
+          server_spiffe_id: spiffe://alpha.$TPDEV_CLUSTER_NAME/_/app/server
           allowed_cas:
             - workload_identity
           client_cert_mode: managed"

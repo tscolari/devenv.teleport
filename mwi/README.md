@@ -49,9 +49,12 @@ The host WorkloadIdentity resources require Unix workload attestation and use
 the connecting process UID in the SPIFFE path:
 
 ```text
-spiffe://teleport-local/alpha/_/host/<uid>/inspector
+spiffe://alpha.teleport-local/_/host/<uid>/inspector
 spiffe://teleport-local/beta/_/host/<uid>/inspector
 ```
+
+Alpha uses the `alpha.teleport-local` virtual trust domain assigned to the
+`/alpha` scope. Beta uses the cluster trust domain as a baseline.
 
 `tp-mwi inspect` removes the JWT-SVID value printed by `tbot spiffe-inspect`.
 Do not invoke the underlying command directly in automation unless retaining a
@@ -80,7 +83,7 @@ spiffe://_teleport_app.teleport-local/app/mwi-mtls-app
 The App Service independently verifies the upstream server identity:
 
 ```text
-spiffe://teleport-local/alpha/_/app/server
+spiffe://alpha.teleport-local/_/app/server
 ```
 
 `tp-mwi app test` first proves that a direct request without a client
@@ -121,7 +124,7 @@ Each tenant has its own scoped Kubernetes join token, tbot DaemonSet, Workload
 API socket, namespace, and service account. The resulting identities are:
 
 ```text
-spiffe://teleport-local/alpha/_/k8s/mwi-alpha/mwi-workload
+spiffe://alpha.teleport-local/_/k8s/mwi-alpha/mwi-workload
 spiffe://teleport-local/beta/_/k8s/mwi-beta/mwi-workload
 ```
 

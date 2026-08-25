@@ -63,7 +63,11 @@ local_tbot() {
 
 require_cluster() {
   [ -f "$TPDEV_CONFIG" ] || die "Teleport config not found at $TPDEV_CONFIG; start devenv first"
-  local_tctl status >/dev/null 2>&1 || die "the local Teleport cluster is not reachable"
+  local output
+  if ! output=$(local_tctl status 2>&1); then
+    printf '%s\n' "$output" >&2
+    die "the local Teleport cluster is not reachable"
+  fi
 }
 
 ensure_state_dir() {
@@ -160,6 +164,13 @@ render_tenant_config() {
   fi
 }
 
+ensure_alpha_virtual_trust_domain() {
+  if local_tctl get virtual_trust_domain/alpha.teleport-local --format=text >/dev/null 2>&1; then
+    return
+  fi
+  local_tctl create "$MWI_ROOT/teleport/alpha-vtd.yaml" >/dev/null
+}
+
 init_tenant() {
   local tenant=$1
   local state_dir storage bot_ref token_ref resource_file token_file bot_existed=0 token_existed=0
@@ -188,6 +199,9 @@ init_tenant() {
     rm -rf "$storage"
   fi
 
+  if [ "$tenant" = alpha ]; then
+    ensure_alpha_virtual_trust_domain
+  fi
   local_tctl create --force "$resource_file" >/dev/null
 
   if ! tenant_storage_has_identity "$tenant" && scoped_resource_exists scoped_token "$token_ref"; then
@@ -306,7 +320,7 @@ inspect_endpoints() {
 test_app() {
   local response expected_client expected_server
   expected_client="spiffe://_teleport_app.$TPDEV_CLUSTER_NAME/app/$TPDEV_MWI_APP_NAME"
-  expected_server="spiffe://$TPDEV_CLUSTER_NAME/alpha/_/app/server"
+  expected_server="spiffe://alpha.$TPDEV_CLUSTER_NAME/_/app/server"
 
   if curl -fsSk "https://127.0.0.1:$TPDEV_MWI_APP_PORT/" >/dev/null 2>&1; then
     die "the upstream accepted a direct connection without a managed client certificate"
@@ -492,6 +506,7 @@ deploy_kubernetes_lab() {
   chart="$TPDEV_SRC/examples/chart/tbot-spiffe-daemon-set"
   [ -f "$chart/Chart.yaml" ] || die "tbot SPIFFE DaemonSet chart not found at $chart"
 
+  ensure_alpha_virtual_trust_domain
   local_tctl create --force "$MWI_ROOT/teleport/alpha.yaml" >/dev/null
   local_tctl create --force "$MWI_ROOT/teleport/beta.yaml" >/dev/null
 

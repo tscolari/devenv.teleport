@@ -1,11 +1,3 @@
-kind: virtual_trust_domain
-version: v1
-metadata:
-  name: alpha.teleport-local
-spec:
-  allowed_scopes:
-    - alpha
----
 kind: bot
 version: v1
 metadata:
@@ -45,7 +37,7 @@ spec:
             eq:
               value: "true"
   spiffe:
-    id: /alpha/_/host/{{ workload.unix.uid }}/inspector
+    id: /_/host/{{ workload.unix.uid }}/inspector
     virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s
@@ -74,7 +66,7 @@ spec:
             eq:
               value: mwi-workload
   spiffe:
-    id: /alpha/_/k8s/{{ workload.kubernetes.namespace }}/{{ workload.kubernetes.service_account }}
+    id: /_/k8s/{{ workload.kubernetes.namespace }}/{{ workload.kubernetes.service_account }}
     virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s
@@ -91,7 +83,7 @@ metadata:
 scope: /alpha
 spec:
   spiffe:
-    id: /alpha/_/app/server
+    id: /_/app/server
     virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s

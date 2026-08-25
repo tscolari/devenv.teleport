@@ -25,7 +25,7 @@ setup() {
 @test "Kubernetes workloads receive attested tenant identities" {
   run tp-mwi inspect kube alpha
   [ "$status" -eq 0 ]
-  [[ "$output" == *"spiffe://$TPDEV_CLUSTER_NAME/alpha/_/k8s/mwi-alpha/mwi-workload"* ]]
+  [[ "$output" == *"spiffe://alpha.$TPDEV_CLUSTER_NAME/_/k8s/mwi-alpha/mwi-workload"* ]]
   [[ "$output" == *"- $TPDEV_CLUSTER_NAME (#CAs:"* ]]
   [[ "$output" != *"eyJ"* ]]
 
