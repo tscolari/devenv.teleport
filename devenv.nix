@@ -26,6 +26,10 @@ let
     set -euo pipefail
     TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
     TPDEV_LICENSE="''${TPDEV_LICENSE:-$TPDEV_SRC/e/fixtures/license-eub.pem}"
+    # Fallback for TPDEV_MAKE: on macOS darwinToolchain resolves the system
+    # make; on Linux (where darwinToolchain is a no-op) use whatever `make`
+    # is on PATH (nix's gnumake from packages).
+    TPDEV_MAKE="''${TPDEV_MAKE:-make}"
     if [ "$TPDEV_EDITION" = "ent" ]; then
       BUILD_DIR="$TPDEV_SRC/e/build"
     else
@@ -253,6 +257,7 @@ in
   # Use TPDEV_WEB to control the Vite hot-reload process independently.
   scripts.tp-build.exec = ''
     ${prelude}
+    ${darwinToolchain}
     if [ "$TPDEV_EDITION" = "ent" ]; then
       if [ ! -f "$TPDEV_SRC/e/Makefile" ]; then
         echo "ERROR: $TPDEV_SRC/e/Makefile not found."
@@ -262,6 +267,12 @@ in
       fi
       "$TPDEV_MAKE" -C "$TPDEV_SRC/e" WEBASSETS_SKIP_BUILD=0 build/teleport build/tctl build/tsh build/tbot
     else
+      if [ ! -f "$TPDEV_SRC/Makefile" ]; then
+        echo "ERROR: $TPDEV_SRC/Makefile not found."
+        echo "Check that TPDEV_SRC points to a valid Teleport source checkout."
+        echo "  TPDEV_SRC=$TPDEV_SRC"
+        exit 1
+      fi
       "$TPDEV_MAKE" -C "$TPDEV_SRC" WEBASSETS_SKIP_BUILD=0 build/teleport build/tctl build/tsh build/tbot
     fi
   '';
@@ -856,6 +867,12 @@ in
   enterShell = darwinToolchain + ''
     # Avoid making ordinary interactive shells look like process-compose clients.
     unset PC_SOCKET_PATH PC_CONFIG_FILES
+
+    # Resolve relative TPDEV_SRC to absolute so scripts work from any CWD.
+    if [ -d "$TPDEV_SRC" ]; then
+      TPDEV_SRC="$(cd "$TPDEV_SRC" && pwd)"
+      export TPDEV_SRC
+    fi
 
     # Default edition if not already set (e.g. via .envrc or devenv.local.nix)
     export TPDEV_EDITION="''${TPDEV_EDITION:-oss}"
