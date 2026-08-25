@@ -95,11 +95,6 @@ in
     # lag by a patch release, so let Go fetch the required toolchain into state.
     GOTOOLCHAIN = lib.mkForce "auto";
 
-    # Skip the web UI rebuild during `tp-build`. The teleport binary will still
-    # embed whatever webassets exist (or stubs). Set to "1" to skip if you only
-    # need the backend (saves significant build time).
-    WEBASSETS_SKIP_BUILD = lib.mkDefault "0";
-
     # TPDEV_MAKE is applied at runtime (see darwinToolchain) so that
     # users can `export TPDEV_MAKE=...` before entering the shell.
 
@@ -253,6 +248,9 @@ in
   # ---------------------------------------------------------------------------
 
   # Build the binaries we need from the sibling checkout.
+  # Always produces binaries with complete embedded web assets (WEBASSETS_SKIP_BUILD=0
+  # is passed as a Make command-line variable to override any inherited environment).
+  # Use TPDEV_WEB to control the Vite hot-reload process independently.
   scripts.tp-build.exec = ''
     ${prelude}
     if [ "$TPDEV_EDITION" = "ent" ]; then
@@ -262,9 +260,9 @@ in
         echo "Check that TPDEV_SRC points to a checkout that includes enterprise code."
         exit 1
       fi
-      "$TPDEV_MAKE" -C "$TPDEV_SRC/e" build/teleport build/tctl build/tsh build/tbot
+      "$TPDEV_MAKE" -C "$TPDEV_SRC/e" WEBASSETS_SKIP_BUILD=0 build/teleport build/tctl build/tsh build/tbot
     else
-      "$TPDEV_MAKE" -C "$TPDEV_SRC" build/teleport build/tctl build/tsh build/tbot
+      "$TPDEV_MAKE" -C "$TPDEV_SRC" WEBASSETS_SKIP_BUILD=0 build/teleport build/tctl build/tsh build/tbot
     fi
   '';
 
