@@ -28,6 +28,7 @@ metadata:
   labels:
     tenant: alpha
     runtime: host
+    trust-boundary: vtd
 scope: /alpha
 spec:
   rules:
@@ -51,6 +52,7 @@ metadata:
   labels:
     tenant: alpha
     runtime: kubernetes
+    trust-boundary: vtd
 scope: /alpha
 spec:
   rules:
@@ -80,12 +82,36 @@ metadata:
   labels:
     tenant: alpha
     runtime: app
+    trust-boundary: vtd
 scope: /alpha
 spec:
   spiffe:
     id: /_/app/server
     virtual_trust_domain: alpha.teleport-local
     x509:
+      maximum_ttl: 300s
+---
+kind: workload_identity
+version: v1
+metadata:
+  name: host-cluster
+  labels:
+    tenant: alpha
+    runtime: host
+    trust-boundary: cluster
+scope: /alpha
+spec:
+  rules:
+    allow:
+      - conditions:
+          - attribute: workload.unix.attested
+            eq:
+              value: "true"
+  spiffe:
+    id: /alpha/_/host/{{ workload.unix.uid }}/cluster-identity
+    x509:
+      maximum_ttl: 300s
+    jwt:
       maximum_ttl: 300s
 ---
 kind: scoped_role_assignment
