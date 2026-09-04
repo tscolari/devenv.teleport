@@ -13,7 +13,7 @@ setup() {
 }
 
 sds_client() {
-  go run "$MWI_ROOT/sds-client" \
+  go -C "$MWI_ROOT/sds-client" run . \
     -socket "$ALPHA_SOCKET" \
     -vtd-trust-domain "alpha.$TPDEV_CLUSTER_NAME" \
     -cluster-trust-domain "$TPDEV_CLUSTER_NAME" \

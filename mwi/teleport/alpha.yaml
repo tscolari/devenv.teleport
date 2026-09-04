@@ -37,9 +37,9 @@ spec:
           - attribute: workload.unix.attested
             eq:
               value: "true"
+  virtual_trust_domain: alpha.teleport-local
   spiffe:
     id: /_/host/{{ workload.unix.uid }}/inspector
-    virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s
     jwt:
@@ -67,9 +67,9 @@ spec:
           - attribute: workload.kubernetes.service_account
             eq:
               value: mwi-workload
+  virtual_trust_domain: alpha.teleport-local
   spiffe:
     id: /_/k8s/{{ workload.kubernetes.namespace }}/{{ workload.kubernetes.service_account }}
-    virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s
     jwt:
@@ -85,9 +85,9 @@ metadata:
     trust-boundary: vtd
 scope: /alpha
 spec:
+  virtual_trust_domain: alpha.teleport-local
   spiffe:
     id: /_/app/server
-    virtual_trust_domain: alpha.teleport-local
     x509:
       maximum_ttl: 300s
 ---
