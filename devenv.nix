@@ -72,10 +72,13 @@ let
     # O(n^2) shell-out explosion on older Teleport branches (v18 and below)
     # due to a bare `export` + recursive $(shell) variables in the Makefile.
     # Default to the system make (resolved via xcrun with a clean PATH to
-    # avoid nix interference). /usr/bin/make is an xcrun shim that causes
-    # infinite recursion when symlinked, so we resolve the real binary.
+    # avoid nix interference). Resolve `gnumake` and not `make`: both Xcode and
+    # the Command Line Tools ship `make` as a shim that re-execs
+    # `$DEVELOPER_DIR/usr/bin/gnumake`, and DEVELOPER_DIR points at the nix
+    # apple-sdk in this shell, which has no gnumake. `gnumake` is the real
+    # GNU Make 3.81 binary sitting next to that shim.
     # Override before entering the shell: export TPDEV_MAKE=/path/to/make
-    export TPDEV_MAKE="''${TPDEV_MAKE:-$(PATH=/usr/bin:/bin /usr/bin/xcrun --find make)}"
+    export TPDEV_MAKE="''${TPDEV_MAKE:-$(PATH=/usr/bin:/bin /usr/bin/xcrun --find gnumake)}"
     # Put TPDEV_MAKE on PATH so all `make` invocations (interactive, recursive,
     # pnpm scripts) use it. A symlink in a stable directory avoids temp clutter.
     if [ -x "$TPDEV_MAKE" ]; then
