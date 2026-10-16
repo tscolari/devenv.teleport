@@ -18,18 +18,7 @@ services:
     name: alpha-workload-api
     listen: unix://${WORKLOAD_SOCKET}
     selector:
-      labels:
-        tenant: ["alpha"]
-        trust-boundary: ["vtd"]
-    credential_ttl: 5m
-    renewal_interval: 1m
-  - type: workload-identity-api
-    name: alpha-mixed-api
-    listen: unix://${MIXED_WORKLOAD_SOCKET}
-    selector:
-      labels:
-        tenant: ["alpha"]
-        runtime: ["host"]
+      name: /alpha::host
     credential_ttl: 5m
     renewal_interval: 1m
   - type: workload-identity-x509

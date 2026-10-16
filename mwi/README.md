@@ -6,13 +6,12 @@ managed-mTLS Application Access.
 
 The lab deliberately models two tenants, `/alpha` and `/beta`. With Teleport's
 current identity model they have independent scoped administration but still
-share the cluster trust domain and SPIFFE CA. This makes the current behavior a
-useful baseline for future development of features.
+share the cluster trust domain and SPIFFE CA.
 
 ## Quickstart
 
 Start the host lab with the Teleport edition and source checkout you want to
-test. Enterprise is recommended when exploring future VTD and federation work:
+test. Enterprise is recommended: scoped administration is an Enterprise feature.
 
 ```sh
 TPDEV_EDITION=ent TPDEV_MWI=1 TPDEV_WEB=0 devenv up
@@ -49,12 +48,12 @@ The host WorkloadIdentity resources require Unix workload attestation and use
 the connecting process UID in the SPIFFE path:
 
 ```text
-spiffe://alpha.teleport-local/_/host/<uid>/inspector
+spiffe://teleport-local/alpha/_/host/<uid>/inspector
 spiffe://teleport-local/beta/_/host/<uid>/inspector
 ```
 
-Alpha uses the `alpha.teleport-local` virtual trust domain assigned to the
-`/alpha` scope. Beta uses the cluster trust domain as a baseline.
+Alpha and beta both resolve under the shared cluster trust domain, scoped by
+their own `/alpha` or `/beta` path prefix.
 
 `tp-mwi inspect` removes the JWT-SVID value printed by `tbot spiffe-inspect`.
 Do not invoke the underlying command directly in automation unless retaining a
@@ -83,7 +82,7 @@ spiffe://_teleport_app.teleport-local/app/mwi-mtls-app
 The App Service independently verifies the upstream server identity:
 
 ```text
-spiffe://alpha.teleport-local/_/app/server
+spiffe://teleport-local/alpha/_/app/server
 ```
 
 `tp-mwi app test` first proves that a direct request without a client
@@ -124,7 +123,7 @@ Each tenant has its own scoped Kubernetes join token, tbot DaemonSet, Workload
 API socket, namespace, and service account. The resulting identities are:
 
 ```text
-spiffe://alpha.teleport-local/_/k8s/mwi-alpha/mwi-workload
+spiffe://teleport-local/alpha/_/k8s/mwi-alpha/mwi-workload
 spiffe://teleport-local/beta/_/k8s/mwi-beta/mwi-workload
 ```
 

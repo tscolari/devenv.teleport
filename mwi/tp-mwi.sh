@@ -153,7 +153,6 @@ render_tenant_config() {
   export REGISTRATION_SECRET="$registration_secret"
   export TBOT_STORAGE="$storage"
   export WORKLOAD_SOCKET="$socket_dir/workload.sock"
-  export MIXED_WORKLOAD_SOCKET="$socket_dir/mixed-workload.sock"
   export TBOT_DIAG_PORT
   TBOT_DIAG_PORT=$(tenant_value "$tenant" "$TPDEV_MWI_ALPHA_DIAG_PORT" "$TPDEV_MWI_BETA_DIAG_PORT")
   export APP_SVID_DIR="$state_dir/app-server"
@@ -163,13 +162,6 @@ render_tenant_config() {
   if [ -z "$registration_secret" ]; then
     yq -i 'del(.onboarding.bound_keypair.registration_secret)' "$state_dir/tbot.yaml"
   fi
-}
-
-ensure_alpha_virtual_trust_domain() {
-  if local_tctl get virtual_trust_domain/alpha.teleport-local --format=text >/dev/null 2>&1; then
-    return
-  fi
-  local_tctl create "$MWI_ROOT/teleport/alpha-vtd.yaml" >/dev/null
 }
 
 init_tenant() {
@@ -200,9 +192,6 @@ init_tenant() {
     rm -rf "$storage"
   fi
 
-  if [ "$tenant" = alpha ]; then
-    ensure_alpha_virtual_trust_domain
-  fi
   local_tctl create --force "$resource_file" >/dev/null
 
   if ! tenant_storage_has_identity "$tenant" && scoped_resource_exists scoped_token "$token_ref"; then
@@ -321,7 +310,7 @@ inspect_endpoints() {
 test_app() {
   local response expected_client expected_server
   expected_client="spiffe://_teleport_app.$TPDEV_CLUSTER_NAME/app/$TPDEV_MWI_APP_NAME"
-  expected_server="spiffe://alpha.$TPDEV_CLUSTER_NAME/_/app/server"
+  expected_server="spiffe://$TPDEV_CLUSTER_NAME/alpha/_/app/server"
 
   if curl -fsSk "https://127.0.0.1:$TPDEV_MWI_APP_PORT/" >/dev/null 2>&1; then
     die "the upstream accepted a direct connection without a managed client certificate"
@@ -507,7 +496,6 @@ deploy_kubernetes_lab() {
   chart="$TPDEV_SRC/examples/chart/tbot-spiffe-daemon-set"
   [ -f "$chart/Chart.yaml" ] || die "tbot SPIFFE DaemonSet chart not found at $chart"
 
-  ensure_alpha_virtual_trust_domain
   local_tctl create --force "$MWI_ROOT/teleport/alpha.yaml" >/dev/null
   local_tctl create --force "$MWI_ROOT/teleport/beta.yaml" >/dev/null
 
@@ -659,29 +647,17 @@ doctor() {
   return "$failed"
 }
 
-run_sds_client() {
-  local socket="${SDS_SOCKET:-/tmp/tpdev-mwi-alpha/workload.sock}"
-  [ -S "$socket" ] || die "Workload API socket is not ready at $socket"
-  (cd "$MWI_ROOT/sds-client" && go run . \
-    -socket "$socket" \
-    -vtd-trust-domain "alpha.$TPDEV_CLUSTER_NAME" \
-    -cluster-trust-domain "$TPDEV_CLUSTER_NAME" \
-    "$@")
-}
-
 run_tests() {
   local suite=${1:-all}
   require_command bats
   case "$suite" in
     host) bats "$MWI_ROOT/tests/host.bats" ;;
-    sds) bats "$MWI_ROOT/tests/sds.bats" ;;
     kube|kubernetes) bats "$MWI_ROOT/tests/kubernetes.bats" ;;
     all)
       bats "$MWI_ROOT/tests/host.bats"
-      bats "$MWI_ROOT/tests/sds.bats"
       bats "$MWI_ROOT/tests/kubernetes.bats"
       ;;
-    *) die "test suite must be host, kube, sds, or all" ;;
+    *) die "test suite must be host, kube, or all" ;;
   esac
 }
 
@@ -693,10 +669,9 @@ Host lab (start with TPDEV_MWI=1 devenv up):
   doctor                         Check local prerequisites and cluster access
   status                         Show host and Kubernetes component readiness
   inspect host <alpha|beta>      Safely inspect a host Workload API
-  inspect sds                    Inspect alpha's SDS endpoint (VTD resources)
   inspect endpoints              Inspect global SPIFFE/OIDC/JWKS endpoints
   app test                       Test the managed-mTLS application path
-  test <host|sds|kube|all>       Run Bats smoke tests
+  test <host|kube|all>           Run Bats smoke tests
 
 Kubernetes lab:
   kube up                        Create/reconcile kind, tbot, and workloads
@@ -730,7 +705,6 @@ main() {
       shift
       case "${1:-}" in
         host) [ "$#" -eq 2 ] || die "usage: tp-mwi inspect host <alpha|beta>"; inspect_host "$2" ;;
-        sds) shift; run_sds_client -json ;;
         kube) [ "$#" -eq 2 ] || die "usage: tp-mwi inspect kube <alpha|beta>"; inspect_kube "$2" ;;
         kube-cross) [ "$#" -eq 1 ] || die "usage: tp-mwi inspect kube-cross"; inspect_kube_cross_tenant_denial ;;
         endpoints) [ "$#" -eq 1 ] || die "usage: tp-mwi inspect endpoints"; inspect_endpoints ;;
